@@ -24,7 +24,17 @@ print(dataset.input_shape)   # (channels, window, signals)
 
 ## Install
 
-From a clone of this repo:
+```bash
+pip install cpsbench
+```
+
+That works after the package is published on PyPI. Until then, install this repository directly:
+
+```bash
+pip install "git+https://github.com/shahriar0651/CPSBench.git"
+```
+
+From a local clone, for development:
 
 ```bash
 pip install -e .
