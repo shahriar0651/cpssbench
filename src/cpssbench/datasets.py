@@ -2,7 +2,7 @@
 
 Usage matches torchvision:
 
-    from cpsbench import SynCAN
+    from cpssbench import SynCAN
 
     train = SynCAN(root="./data", split="train", download=True)
     window, label = train[0]

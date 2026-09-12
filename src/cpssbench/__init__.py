@@ -1,8 +1,8 @@
-"""CPSBench datasets, loaded like MNIST.
+"""cpssbench: Cyber-Physical Systems Security Bench, loaded like MNIST.
 
 Example::
 
-    from cpsbench import SynCAN
+    from cpssbench import SynCAN
     from torch.utils.data import DataLoader
 
     train = SynCAN(root="./data", split="train", download=True)

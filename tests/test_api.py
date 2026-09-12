@@ -8,9 +8,9 @@ import numpy as np
 import pandas as pd
 import torch
 
-from cpsbench import list_datasets, load
-from cpsbench.specs import get_spec
-from cpsbench.windows import WindowDataset
+from cpssbench import list_datasets, load
+from cpssbench.specs import get_spec
+from cpssbench.windows import WindowDataset
 
 
 class RegistryTests(unittest.TestCase):

@@ -2,7 +2,7 @@
 
 from torch.utils.data import DataLoader
 
-from cpsbench import SynCAN, list_datasets
+from cpssbench import SynCAN, list_datasets
 
 print("Registered datasets:")
 for row in list_datasets():

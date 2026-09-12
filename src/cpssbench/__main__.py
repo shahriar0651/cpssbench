@@ -1,4 +1,4 @@
-"""Small command-line helper: ``python -m cpsbench list``."""
+"""Small command-line helper: ``python -m cpssbench list``."""
 
 from __future__ import annotations
 
