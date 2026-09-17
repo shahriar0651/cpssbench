@@ -157,9 +157,12 @@ SPECS: dict[str, DatasetSpec] = {
     "misbehaviorx": DatasetSpec(
         name="misbehaviorx",
         family="v2x",
-        description="VeReMi-extension / MisbehaviorX V2X misbehavior traces.",
-        citation="Kamel et al., VeReMi Extension.",
-        source_url="https://github.com/josephkamel/VeReMi-Dataset",
+        description="MisbehaviorX V2X misbehavior traces (VASP / IEEE DataPort).",
+        citation="Shahriar et al., MisbehaviorX, IEEE DataPort, doi:10.21227/s44z-8616.",
+        source_url=(
+            "https://ieee-dataport.org/documents/"
+            "misbehaviorx-comprehensive-v2x-misbehavior-detection-dataset-enabled-v2x-application"
+        ),
         downloadable=False,
         features=MISBEHAVIORX_FEATURES,
         attributes=MISBEHAVIORX_ATTRIBUTES,
@@ -167,8 +170,9 @@ SPECS: dict[str, DatasetSpec] = {
         step_size=10,
         status="manual",
         notes=(
-            "Place curated ambient/ and attacks/ folders under the dataset root. "
-            "Automatic download is not wired yet."
+            "Download MisbehaviorX.zip from IEEE DataPort (subscription required), "
+            "curate relative-feature CSVs, and place them under ambient/generated "
+            "and attacks/generated. See docs/V2X.md. Automatic download is not wired yet."
         ),
     ),
     "x-canids": DatasetSpec(
