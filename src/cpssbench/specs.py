@@ -9,6 +9,27 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Optional
 
+# Canonical modes used when writing window arrays. Aliases are accepted at load time.
+FILLING_MODES = ("forward", "none", "zero")
+FILLING_ALIASES = {
+    "forward": "forward",
+    "ffill": "forward",
+    "none": "none",
+    "nan": "none",
+    "null": "none",
+    "zero": "zero",
+    "0": "zero",
+}
+
+
+def normalize_filling(filling: str) -> str:
+    """Map user-facing filling names to a canonical mode."""
+    key = str(filling).strip().lower()
+    if key not in FILLING_ALIASES:
+        allowed = ", ".join(FILLING_MODES) + " (aliases: nan, ffill, 0)"
+        raise ValueError(f"Unknown filling '{filling}'. Choose one of: {allowed}.")
+    return FILLING_ALIASES[key]
+
 
 @dataclass(frozen=True)
 class DatasetSpec:
@@ -48,6 +69,7 @@ class DatasetSpec:
         window_size: Optional[int] = None,
         step_size: Optional[int] = None,
         sampling_period: Optional[int] = None,
+        filling: Optional[str] = None,
     ) -> "DatasetSpec":
         updates = {}
         if window_size is not None:
@@ -56,6 +78,13 @@ class DatasetSpec:
             updates["step_size"] = int(step_size)
         if sampling_period is not None:
             updates["sampling_period"] = int(sampling_period)
+        if filling is not None:
+            if self.family != "can":
+                raise ValueError(
+                    f"filling overrides are only valid for CAN datasets "
+                    f"(got family={self.family!r} for {self.name})."
+                )
+            updates["filling"] = normalize_filling(filling)
         return replace(self, **updates) if updates else self
 
 

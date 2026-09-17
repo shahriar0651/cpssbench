@@ -12,7 +12,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
-from .specs import DatasetSpec
+from .specs import DatasetSpec, normalize_filling
 
 
 def _process_id(target_id, frame: pd.DataFrame) -> pd.DataFrame:
@@ -92,11 +92,33 @@ def _write_file_index(split_path: Path) -> dict[str, int]:
     return mapping
 
 
+def apply_filling(signals: pd.DataFrame, filling: str) -> pd.DataFrame:
+    """Fill intermittent CAN gaps, or leave them as NaN.
+
+    Modes:
+      - ``forward``: forward-fill then back-fill (dense windows)
+      - ``none`` / ``nan``: keep missing bus samples as NaN (MAE-friendly)
+      - ``zero``: replace missing values with 0.0
+    """
+    mode = normalize_filling(filling)
+    if mode == "forward":
+        return signals.ffill().bfill()
+    if mode == "zero":
+        return signals.fillna(0.0)
+    return signals
+
+
+def windows_dir(split_path: Path, filling: str) -> Path:
+    """Per-filling cache directory for sig/att arrays (parquets stay under generated/)."""
+    return Path(split_path) / "generated" / normalize_filling(filling)
+
+
 def _npy_one_file(
     spec: DatasetSpec,
     file_name: str,
     parquet_path: Path,
     file_enum: dict[str, int],
+    out_dir: Path,
 ) -> None:
     frame = pd.read_parquet(parquet_path, engine="pyarrow")
     frame = frame.replace(file_enum)
@@ -107,17 +129,26 @@ def _npy_one_file(
     total_elements = 100_000_000
     max_length = max(int(total_elements / max(len(spec.features), 1)), 1)
     n_chunks = int(np.ceil(len(signals) / max_length))
-    generated = parquet_path.parent
+    out_dir.mkdir(parents=True, exist_ok=True)
 
     for index in range(n_chunks):
         start = int(index * max_length)
         stop = min(int((index + 1) * max_length), len(signals))
-        signal_chunk = signals.iloc[start:stop]
+        raw_chunk = signals.iloc[start:stop]
+        # Mask is computed before filling so forward-filled caches still know true bus gaps.
+        obs_mask = raw_chunk.notna().to_numpy(dtype=np.float32)
+        signal_chunk = apply_filling(raw_chunk, spec.filling)
         attr_chunk = attributes.iloc[start:stop]
-        if spec.filling == "forward":
-            signal_chunk = signal_chunk.ffill().bfill()
-        np.save(generated / f"sig_{file_name}_{index + 1}.npy", signal_chunk.to_numpy())
-        np.save(generated / f"att_{file_name}_{index + 1}.npy", attr_chunk.to_numpy())
+        np.save(out_dir / f"sig_{file_name}_{index + 1}.npy", signal_chunk.to_numpy())
+        np.save(out_dir / f"msk_{file_name}_{index + 1}.npy", obs_mask)
+        np.save(out_dir / f"att_{file_name}_{index + 1}.npy", attr_chunk.to_numpy())
+
+
+def _chunk_stems_ready(out_dir: Path, parquet_stem: str) -> bool:
+    sigs = sorted(out_dir.glob(f"sig_{parquet_stem}_*.npy"))
+    msks = sorted(out_dir.glob(f"msk_{parquet_stem}_*.npy"))
+    atts = sorted(out_dir.glob(f"att_{parquet_stem}_*.npy"))
+    return bool(sigs) and len(sigs) == len(msks) == len(atts)
 
 
 def prepare_can_split(
@@ -126,8 +157,12 @@ def prepare_can_split(
     scaler_path: Path,
     fit_scaler: bool,
     n_jobs: int | None = None,
-) -> None:
-    """Download-side preprocessing for one SynCAN/ROAD split directory."""
+) -> Path:
+    """Download-side preprocessing for one SynCAN/ROAD split directory.
+
+    Returns the directory that holds ``sig_*.npy`` / ``msk_*.npy`` / ``att_*.npy``
+    for ``spec.filling``. Observation masks are always written (pre-fill).
+    """
     split_path = Path(split_path)
     if not any(split_path.glob("*.csv")):
         raise FileNotFoundError(
@@ -137,6 +172,8 @@ def prepare_can_split(
     generated = split_path / "generated"
     generated.mkdir(parents=True, exist_ok=True)
     workers = n_jobs if n_jobs is not None else min(8, os.cpu_count() or 1)
+    filling = normalize_filling(spec.filling)
+    out_dir = windows_dir(split_path, filling)
 
     if not list(generated.glob("gen_*.parquet")):
         for csv_path in sorted(split_path.glob("*.csv")):
@@ -152,7 +189,11 @@ def prepare_can_split(
         )
 
     file_enum = _write_file_index(split_path)
+    out_dir.mkdir(parents=True, exist_ok=True)
     for parquet_path in sorted(generated.glob("gen_*.parquet")):
-        npy_files = list(generated.glob(f"sig_{parquet_path.stem}_*.npy"))
-        if not npy_files:
-            _npy_one_file(spec, parquet_path.stem, parquet_path, file_enum)
+        if not _chunk_stems_ready(out_dir, parquet_path.stem):
+            for pattern in (f"sig_{parquet_path.stem}_*.npy", f"msk_{parquet_path.stem}_*.npy", f"att_{parquet_path.stem}_*.npy"):
+                for stale in out_dir.glob(pattern):
+                    stale.unlink()
+            _npy_one_file(spec, parquet_path.stem, parquet_path, file_enum, out_dir)
+    return out_dir

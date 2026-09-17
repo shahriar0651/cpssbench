@@ -15,7 +15,7 @@ from __future__ import annotations
 from typing import Optional
 
 from .datasets import MisbehaviorX, ROAD, SynCAN, VehicularDataset
-from .specs import DatasetSpec, get_spec, list_specs
+from .specs import FILLING_MODES, DatasetSpec, get_spec, list_specs, normalize_filling
 
 __all__ = [
     "SynCAN",
@@ -26,9 +26,11 @@ __all__ = [
     "list_datasets",
     "describe",
     "get_spec",
+    "FILLING_MODES",
+    "normalize_filling",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 _CLASSES = {
     "syncan": SynCAN,

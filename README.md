@@ -67,6 +67,41 @@ dataset = ROAD(root="./data", split="train", download=True, window_size=50, step
 
 Pass `return_meta=True` if you also need the source file and row index: `(window, label, {"file", "idx"})`.
 
+### CAN gap filling (SynCAN / ROAD only)
+
+CAN frames are intermittent, so each timestamp only observes the transmitting ID's signals. Choose how to treat those gaps when building the cached signal arrays:
+
+| `filling` | Behavior |
+| --- | --- |
+| `"forward"` (default) | Forward-fill then back-fill → dense windows |
+| `"none"` / `"nan"` | Leave missing samples as `NaN` in the cache |
+| `"zero"` | Replace missing samples with `0.0` in the cache |
+
+Observation masks are always saved **before** filling. With `return_mask=True` you get the MAE-style triple even while using forward fill:
+
+| Tensor | Per-sample shape | Batched (`DataLoader`) | Meaning |
+| --- | --- | --- | --- |
+| `x` | `(C, T, F)` | `(N, C, T, F)` | Min–max scaled; **gaps forced to `0`** |
+| `mask` | `(C, T, F)` | `(N, C, T, F)` | **`1` = real observation**, **`0` = intermittent gap** |
+| `y` | scalar | `(N,)` | Attack label |
+
+(`C=1` channel axis matches the existing MNIST-style layout; squeeze `C` if you prefer `(N, T, F)`.)
+
+```python
+from cpssbench import ROAD
+from torch.utils.data import DataLoader
+
+ds = ROAD(root="./data", split="train", filling="forward", return_mask=True)
+x, y, mask = ds[0]
+# Supervise only real bus samples, e.g.:
+# loss = (((recon - x) ** 2) * mask).sum() / mask.sum().clamp_min(1)
+
+loader = DataLoader(ds, batch_size=64, shuffle=True)
+x, y, mask = next(iter(loader))  # x, mask: (N, 1, T, F)
+```
+
+Without `return_mask`, `__getitem__` stays `(x, y)` and keeps the filled dense values (classic IDS path). Each filling mode is cached under `generated/<filling>/` with matching `msk_*.npy` files. V2X / MisbehaviorX do not accept `filling` or `return_mask`.
+
 ## Layout
 
 Each sample is a min-max scaled window with a channel axis, so the same convolutional IDS can run on every dataset. Shape is always `(channels, window_size, num_signals)`. Label `0` is benign and `1` is attack (any attack flag inside the window).

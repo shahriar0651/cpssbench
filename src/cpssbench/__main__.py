@@ -20,6 +20,12 @@ def main() -> None:
     fetch.add_argument("name")
     fetch.add_argument("--root", default="./data")
     fetch.add_argument("--split", default="train", choices=["train", "test"])
+    fetch.add_argument(
+        "--filling",
+        default=None,
+        choices=["forward", "none", "nan", "zero", "ffill", "0"],
+        help="CAN only: how to treat intermittent bus gaps (forward / none|nan / zero).",
+    )
 
     args = parser.parse_args()
     if args.command == "list":
@@ -30,8 +36,12 @@ def main() -> None:
         spec = describe(args.name)
         print(spec)
     else:
-        dataset = load(args.name, root=args.root, split=args.split, download=True, verbose=True)
-        print(f"Loaded {len(dataset)} windows with shape {dataset.input_shape}")
+        kwargs = dict(root=args.root, split=args.split, download=True, verbose=True)
+        if args.filling is not None:
+            kwargs["filling"] = args.filling
+        dataset = load(args.name, **kwargs)
+        suffix = f" filling={dataset.filling}" if describe(args.name).family == "can" else ""
+        print(f"Loaded {len(dataset)} windows with shape {dataset.input_shape}{suffix}")
 
 
 if __name__ == "__main__":
